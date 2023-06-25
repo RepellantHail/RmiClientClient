@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface ChatServer extends Remote {
     void register(String name,ChatClient client) throws RemoteException;
+
     void sendMessage(String sender, String message) throws RemoteException;
     void unregister(ChatClient client) throws RemoteException;
     void broadcastMessage(String sender,String message) throws RemoteException;

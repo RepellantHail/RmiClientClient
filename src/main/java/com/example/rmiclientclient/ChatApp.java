@@ -1,13 +1,16 @@
 package com.example.rmiclientclient;
 
 import javafx.application.Application;
+import javafx.collections.ListChangeListener.Change;
 import javafx.application.Platform;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import java.rmi.Naming;
@@ -17,8 +20,8 @@ import java.util.Optional;
 public class ChatApp extends Application  {
     private ChatServer server;
     private ChatClient client;
-    private ObservableList<String> userList;
-    private ListView<String> userListView;
+    private TextArea chatArea;
+    private ListView<String> userListView = new ListView<>();
 
     public static void main(String[] args) {
         launch(args);
@@ -28,7 +31,7 @@ public class ChatApp extends Application  {
     public void start(Stage primaryStage) {
         try {
             server = (ChatServer) Naming.lookup("rmi://localhost/ChatServer");
-            Naming.rebind("ChatServer", server);
+            //Naming.rebind("ChatServer", server);
             System.out.println("Servidor de chat iniciado.");
 
             String name = showNameDialog();
@@ -36,20 +39,10 @@ public class ChatApp extends Application  {
             server.register(name,client);
             System.out.println("Cliente registrado: " + name);
 
-            userList = FXCollections.observableArrayList();
-            userList.add(name);
-            userListView = new ListView<>(FXCollections.observableArrayList());
             userListView.setPrefWidth(200);
             userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
-            userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-                // Actualizar el destinatario del mensaje cuando se selecciona un usuario de la lista
-                // Puedes usar newValue para obtener el nombre del usuario seleccionado
-                String recipient = newValue;
-                openPrivateChat(recipient);
-            });
-            userListView.setItems(userList);
 
-            TextArea chatArea = new TextArea();
+            chatArea = new TextArea();
             chatArea.setEditable(false);
             client.setChatArea(chatArea);
 
@@ -80,12 +73,14 @@ public class ChatApp extends Application  {
             VBox chatBox = new VBox(10, chatArea, messageField, sendButton);
             chatBox.setPadding(new Insets(10));
 
-            BorderPane root = new BorderPane();
-            root.setLeft(userListView);
-            root.setCenter(chatBox);
+            HBox root = new HBox(userListView, chatBox);
+            root.setSpacing(10);
+            root.setPadding(new Insets(10));
 
-            primaryStage.setTitle("Chat");
-            primaryStage.setScene(new Scene(root, 400, 300));
+            Scene scene = new Scene(root, 600, 400);
+
+            primaryStage.setTitle("Chat App");
+            primaryStage.setScene(scene);
             primaryStage.setOnCloseRequest(e -> {
                 try {
                     server.unregister(client);
@@ -95,6 +90,24 @@ public class ChatApp extends Application  {
                 }
             });
             primaryStage.show();
+
+            client.getUserList().addListener((Change<? extends String> change) -> {
+                Platform.runLater(() -> {
+                    try {
+                        userListView.setItems(client.getUserList());
+                    } catch (RemoteException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            });
+
+            client.getMessageReceived().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                Platform.runLater(() -> {
+                    chatArea.appendText(newValue + "\n");
+                });
+            });
+
+
         } catch (Exception e) {
             e.printStackTrace();
         }
