@@ -37,14 +37,17 @@ public class ChatApp extends Application  {
             System.out.println("Cliente registrado: " + name);
 
             userList = FXCollections.observableArrayList();
-            userListView = new ListView<>(userList);
+            userList.add(name);
+            userListView = new ListView<>(FXCollections.observableArrayList());
             userListView.setPrefWidth(200);
             userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
             userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
                 // Actualizar el destinatario del mensaje cuando se selecciona un usuario de la lista
                 // Puedes usar newValue para obtener el nombre del usuario seleccionado
                 String recipient = newValue;
+                openPrivateChat(recipient);
             });
+            userListView.setItems(userList);
 
             TextArea chatArea = new TextArea();
             chatArea.setEditable(false);
@@ -105,5 +108,10 @@ public class ChatApp extends Application  {
 
         Optional<String> result = dialog.showAndWait();
         return result.orElse("Usuario");
+    }
+
+    private void openPrivateChat(String recipient) {
+        // Lógica para abrir un chat privado con el usuario seleccionado
+        // Puedes implementar esta parte según tus necesidades
     }
 }

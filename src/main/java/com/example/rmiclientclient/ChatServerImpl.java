@@ -72,7 +72,7 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
     private void broadcastUserList(List<String> userList) {
         for (ChatClient client : clients) {
             try {
-                client.updateUserList(userList);
+                client.updateUserListView(userList);
             } catch (RemoteException e) {
                 // Manejar la excepción apropiadamente
             }
