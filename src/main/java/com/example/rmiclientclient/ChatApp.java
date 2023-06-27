@@ -15,6 +15,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.util.List;
 import java.util.Optional;
 
 public class ChatApp extends Application  {
@@ -31,7 +32,6 @@ public class ChatApp extends Application  {
     public void start(Stage primaryStage) {
         try {
             server = (ChatServer) Naming.lookup("rmi://localhost/ChatServer");
-            //Naming.rebind("ChatServer", server);
             System.out.println("Servidor de chat iniciado.");
 
             String name = showNameDialog();
@@ -89,7 +89,6 @@ public class ChatApp extends Application  {
                     ex.printStackTrace();
                 }
             });
-            primaryStage.show();
 
             client.getUserList().addListener((Change<? extends String> change) -> {
                 Platform.runLater(() -> {
@@ -106,6 +105,8 @@ public class ChatApp extends Application  {
                     chatArea.appendText(newValue + "\n");
                 });
             });
+
+            primaryStage.show();
 
 
         } catch (Exception e) {

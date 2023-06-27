@@ -10,6 +10,7 @@ import java.util.List;
 
 public interface ChatClient extends Remote {
     void receiveMessage(String message) throws RemoteException;
+    List<String> getMessageHistory(String sender) throws RemoteException;
     void notifyUserJoined(String userName) throws RemoteException;
     void updateUserList(List<String> userList) throws RemoteException;
     void setChatArea(TextArea chatArea) throws RemoteException;

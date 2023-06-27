@@ -20,12 +20,11 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
-    private ListView<String> userListView  = new ListView<>();;
+    private Map<String, List<String>> messageHistory;
+    private ListView<String> userListView  = new ListView<>();
     private TextArea chatArea;
     ChatServer  server;
     private ObservableList<String> userList;
@@ -114,6 +113,7 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
         server.register(name, this);
         this.userList = FXCollections.observableArrayList();
         this.chatArea = new TextArea();
+        this.messageHistory = new HashMap<>();
     }
 
     public String getName() throws RemoteException {
@@ -144,19 +144,30 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
         Scanner scanner = new Scanner(System.in);
         System.out.println("Bienvenido al chat. Escribe 'salir' para salir.");
         while (true) {
-            String message = scanner.nextLine();
-            if (message.equalsIgnoreCase("salir")) {
+            String input = scanner.nextLine();
+            if (input.equalsIgnoreCase("salir")) {
                 try {
                     server.unregister(this);
                 } catch (RemoteException e) {
                     // Manejar la excepción apropiadamente
                 }
                 break;
-            } else {
-                try {
-                    server.sendMessage(name, message);
-                } catch (RemoteException e) {
-                    // Manejar la excepción apropiadamente
+            }  else if (input.equalsIgnoreCase("historial")) {
+                System.out.print("Ingrese el nombre del usuario: ");
+                String recipient = scanner.nextLine();
+                printMessageHistory(recipient);
+            }else {
+                String[] parts = input.split(" ", 3);
+                if (parts.length == 3) {
+                    String recipient = parts[0];
+                    String message = parts[2];
+                    try {
+                        server.sendMessage(name, recipient, message);
+                    } catch (RemoteException e) {
+                        // Manejar la excepción apropiadamente
+                    }
+                } else {
+                    System.out.println("Formato de mensaje incorrecto. El formato debe ser: <destinatario> mensaje");
                 }
             }
         }
@@ -180,5 +191,31 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
             this.chatArea.appendText(message + "\n");
         });
     }
+
+    @Override
+    public List<String> getMessageHistory(String sender) throws RemoteException {
+        if (messageHistory.containsKey(sender)) {
+            return messageHistory.get(sender);
+        }
+        return new ArrayList<>();
+    }
+
+    private void addMessageToHistory(String sender, String recipient, String message) {
+        messageHistory.computeIfAbsent(sender, k -> new ArrayList<>())
+                .add(message);
+    }
+
+    private void printMessageHistory(String recipient) {
+        try {
+            List<String> messageHistory = server.getMessageHistory(name, recipient);
+            System.out.println("Historial de mensajes con " + recipient + ":");
+            for (String message : messageHistory) {
+                System.out.println(message);
+            }
+        } catch (RemoteException e) {
+            // Manejar la excepción apropiadamente
+        }
+    }
+
 
 }
