@@ -69,6 +69,17 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
 
             // Agregar la lista de usuarios conectados
             userListView.setPrefHeight(200);
+            List<String> userList = null;
+            try {
+                userList = server.getUserList();
+            } catch (RemoteException e) {
+                throw new RuntimeException(e);
+            }
+            List<String> finalUserList = userList;
+            Platform.runLater(() -> {
+                this.userList.setAll(finalUserList);
+                userListView.setItems(this.userList);
+            });
 
             // Agregar los componentes a la ventana
             root.getChildren().addAll(chatArea, userListView);
@@ -88,18 +99,17 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
     }
     private void startClient(String name, ChatServer server) {
         try {
-            // Verificar si el cliente ya está registrado
             if (!server.getUserList().contains(name)) {
-                // Crear instancia del cliente y unirse al chat
                 ChatClientImpl client = new ChatClientImpl(name, server);
-
-                // Obtener la lista de usuarios del servidor y asociarla con la lista de usuarios en la interfaz de usuario del cliente
                 List<String> userList = server.getUserList();
                 Platform.runLater(() -> {
+                    try {
+                        updateUserList(userList);
+                    } catch (RemoteException e) {
+                        throw new RuntimeException(e);
+                    }
                     this.userList.setAll(userList);
                 });
-
-                // Iniciar el bucle principal para enviar mensajes
                 client.run();
             }
         } catch (Exception e) {
@@ -107,13 +117,10 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
         }
     }
     public ChatClientImpl(String name, ChatServer server) throws RemoteException {
-        super();
         this.name = name;
         this.server = server;
-        server.register(name, this);
-        this.userList = FXCollections.observableArrayList();
-        this.chatArea = new TextArea();
-        this.messageHistory = new HashMap<>();
+        messageHistory = new HashMap<>();
+        userList = FXCollections.observableArrayList();
     }
 
     public String getName() throws RemoteException {
@@ -121,54 +128,31 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
     }
     @Override
     public void updateUserList(List<String> userList) throws RemoteException {
-        System.out.println("Usuarios en línea:");
-        for (String user : userList) {
-            System.out.println(user);
-        }
         Platform.runLater(() -> {
-            System.out.println("User List Update: " + userList); // Agregamos esta línea
-            updateListView(userList); // Actualizamos la lista de usuarios
+            this.userList.setAll(userList);
         });
     }
 
     private void updateListView(List<String> userList) {
-        System.out.println("Updating List View"); // Agregamos esta línea
-        this.userList.clear();
-        this.userList.addAll(userList);
+        Platform.runLater(() -> {
+            userListView.getItems().clear();
+            userListView.getItems().addAll(userList);
+        });
     }
     @Override
     public void notifyUserJoined(String userName) throws RemoteException {
         System.out.println(userName + " se ha unido al chat.");
     }
-    private void run() {
+    public void run() {
         Scanner scanner = new Scanner(System.in);
-        System.out.println("Bienvenido al chat. Escribe 'salir' para salir.");
         while (true) {
-            String input = scanner.nextLine();
-            if (input.equalsIgnoreCase("salir")) {
-                try {
-                    server.unregister(this);
-                } catch (RemoteException e) {
-                    // Manejar la excepción apropiadamente
-                }
-                break;
-            }  else if (input.equalsIgnoreCase("historial")) {
-                System.out.print("Ingrese el nombre del usuario: ");
-                String recipient = scanner.nextLine();
-                printMessageHistory(recipient);
-            }else {
-                String[] parts = input.split(" ", 3);
-                if (parts.length == 3) {
-                    String recipient = parts[0];
-                    String message = parts[2];
-                    try {
-                        server.sendMessage(name, recipient, message);
-                    } catch (RemoteException e) {
-                        // Manejar la excepción apropiadamente
-                    }
-                } else {
-                    System.out.println("Formato de mensaje incorrecto. El formato debe ser: <destinatario> mensaje");
-                }
+            String message = scanner.nextLine();
+            try {
+                server.broadcastMessage(name, message);
+                addMessageToHistory(name, "Broadcast", name + ": " + message);
+                Platform.runLater(() -> chatArea.appendText(name + ": " + message + "\n"));
+            } catch (RemoteException e) {
+                e.printStackTrace();
             }
         }
     }
@@ -205,17 +189,34 @@ public class ChatClientImpl extends UnicastRemoteObject implements ChatClient {
                 .add(message);
     }
 
-    private void printMessageHistory(String recipient) {
-        try {
-            List<String> messageHistory = server.getMessageHistory(name, recipient);
-            System.out.println("Historial de mensajes con " + recipient + ":");
-            for (String message : messageHistory) {
-                System.out.println(message);
-            }
-        } catch (RemoteException e) {
-            // Manejar la excepción apropiadamente
+    @Override
+    public void updateChatArea(List<String> messages) throws RemoteException {
+        StringBuilder chatText = new StringBuilder();
+        for (String message : messages) {
+            chatText.append(message).append("\n");
         }
+        Platform.runLater(() -> chatArea.setText(chatText.toString()));
     }
 
+    @Override
+    public void receiveChatHistory(String sender, String recipient, List<String> history) throws RemoteException {
+        Platform.runLater(() -> {
+            if (recipient.equals(name)) {
+                chatArea.clear();
+                for (String message : history) {
+                    chatArea.appendText(message + "\n");
+                }
+            }
+        });
+    }
+
+    private String getMessageKey(String sender, String recipient) {
+        return sender + "_" + recipient;
+    }
+
+    @Override
+    public void clearChatArea() throws RemoteException {
+        Platform.runLater(() -> chatArea.clear());
+    }
 
 }

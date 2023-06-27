@@ -20,13 +20,9 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
 
     public static void main(String[] args) {
         try {
-            // Crear instancia del servidor
             ChatServerImpl server = new ChatServerImpl();
-
-            // Registrar el servidor en el registro RMI
             Registry registry = LocateRegistry.createRegistry(RMI_PORT);
             registry.rebind("ChatServer", server);
-
             System.out.println("Servidor RMI en ejecución...");
         } catch (RemoteException e) {
             System.err.println("Error al iniciar el servidor RMI: " + e.getMessage());
@@ -40,6 +36,8 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
             client.notifyUserJoined(name);
             notifyClients(client);
             broadcastUserList(getUserList());
+            sendChatHistory(client, name);
+            updateUserList();
         }
     }
 
@@ -51,7 +49,6 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
             // Manejar la excepción apropiadamente
         }
     }
-
     @Override
     public List<String> getUserList() throws RemoteException {
         List<String> userList = new ArrayList<>();
@@ -64,7 +61,7 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
     public void unregister(ChatClient client) throws RemoteException {
         clients.remove(client);
         System.out.println("Cliente eliminado: " + client.getName());
-        broadcastUserList(getUserList()); // Actualizamos la lista de usuarios en los clientes restantes// Agregamos esta línea para actualizar las listas de usuarios en los clientes existentes
+        broadcastUserList(getUserList());
     }
     @Override
     public void broadcastMessage(String sender, String message) throws RemoteException {
@@ -86,15 +83,14 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
     @Override
     public synchronized void sendMessage(String sender, String recipient, String message) throws RemoteException {
         String formattedMessage = sender + ": " + message;
+        addMessageToHistory(sender, recipient, formattedMessage);
         for (ChatClient client : clients) {
-            if (client.getName().equals(sender)) {
+            if (client.getName().equals(recipient)) {
                 client.receiveMessage(formattedMessage);
-                addMessageToHistory(sender, recipient, formattedMessage);
-            } else if (client.getName().equals(recipient)) {
-                client.receiveMessage("[Private] " + sender + ": " + message);
-                addMessageToHistory(sender, recipient, "[Private] " + sender + ": " + message);
+                return;
             }
         }
+        throw new RemoteException("El destinatario no está conectado.");
     }
     @Override
     public List<String> getMessageHistory(String sender, String recipient) throws RemoteException {
@@ -102,17 +98,59 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
             Map<String, List<String>> senderHistory = messageHistory.get(sender);
             if (senderHistory.containsKey(recipient)) {
                 return senderHistory.get(recipient);
+            } else {
+                senderHistory.put(recipient, new ArrayList<>());  // Agregar esta línea
+                return senderHistory.get(recipient);
             }
+        } else {
+            messageHistory.put(sender, new HashMap<>());  // Agregar esta línea
+            messageHistory.get(sender).put(recipient, new ArrayList<>());  // Agregar esta línea
+            return messageHistory.get(sender).get(recipient);
         }
-        return new ArrayList<>();
     }
 
     @Override
     public void addMessageToHistory(String sender, String recipient, String message) {
-        messageHistory.computeIfAbsent(sender, k -> new HashMap<>())
-                .computeIfAbsent(recipient, k -> new ArrayList<>())
-                .add(message);
+        messageHistory.computeIfAbsent(sender, k -> new HashMap<>());
+        messageHistory.get(sender).computeIfAbsent(recipient, k -> new ArrayList<>()).add(message);
     }
+
+    private void sendChatHistory(ChatClient client, String sender) {
+        try {
+            for (String recipient : getUserList()) {
+                List<String> history = getMessageHistory(sender, recipient);
+                client.receiveChatHistory(sender, recipient, history);
+            }
+        } catch (RemoteException e) {
+            // Manejar la excepción apropiadamente
+        }
+    }
+
+    private void sendChatHistoryToClient(ChatClient client, String sender, String recipient) {
+        try {
+            List<String> history = getMessageHistory(sender, recipient);
+            client.receiveChatHistory(sender, recipient, history);
+        } catch (RemoteException e) {
+            // Manejar la excepción apropiadamente
+        }
+    }
+
+    private void updateUserList() {
+        List<String> userList = null;
+        try {
+            userList = getUserList();
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+        for (ChatClient client : clients) {
+            try {
+                client.updateUserList(userList);
+            } catch (RemoteException e) {
+                // Manejar la excepción apropiadamente
+            }
+        }
+    }
+
 
     @Override
     public void sendMessageToClient(String recipient, String message) throws RemoteException {
@@ -124,6 +162,7 @@ public class ChatServerImpl extends UnicastRemoteObject implements ChatServer {
             }
         }
     }
+
 
 
 }

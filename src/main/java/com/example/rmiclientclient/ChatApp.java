@@ -17,6 +17,7 @@ import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class ChatApp extends Application  {
     private ChatServer server;
@@ -41,6 +42,23 @@ public class ChatApp extends Application  {
 
             userListView.setPrefWidth(200);
             userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+            userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    try {
+                        String recipient = newValue;
+                        List<String> messageHistory = server.getMessageHistory(client.getName(), recipient);
+                        chatArea.clear();
+                        for (String message : messageHistory) {
+                            chatArea.appendText(message + "\n");
+                        }
+                        client.receiveChatHistory(client.getName(), recipient, messageHistory); // Agregar esta línea
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    chatArea.clear();
+                }
+            });
 
             chatArea = new TextArea();
             chatArea.setEditable(false);
@@ -61,7 +79,6 @@ public class ChatApp extends Application  {
                         }
                     }
                 }else {
-                    // Mostrar un mensaje de error si no se ha seleccionado ningún destinatario
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Error");
                     alert.setHeaderText(null);
@@ -89,6 +106,7 @@ public class ChatApp extends Application  {
                     ex.printStackTrace();
                 }
             });
+            primaryStage.show();
 
             client.getUserList().addListener((Change<? extends String> change) -> {
                 Platform.runLater(() -> {
@@ -106,13 +124,22 @@ public class ChatApp extends Application  {
                 });
             });
 
-            primaryStage.show();
-
-
+            // Obtener la lista de usuarios del servidor y asociarla con la lista de usuarios en la interfaz de usuario del cliente
+            List<String> userList = server.getUserList();
+            client.getUserList().setAll(userList);
+            updateListView(userList);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+    private void updateListView(List<String> userList) {
+        Platform.runLater(() -> {
+            userListView.getItems().clear();
+            userListView.getItems().addAll(userList);
+        });
+    }
+
 
     private String showNameDialog() {
         TextInputDialog dialog = new TextInputDialog();
@@ -124,8 +151,4 @@ public class ChatApp extends Application  {
         return result.orElse("Usuario");
     }
 
-    private void openPrivateChat(String recipient) {
-        // Lógica para abrir un chat privado con el usuario seleccionado
-        // Puedes implementar esta parte según tus necesidades
-    }
 }

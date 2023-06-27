@@ -17,4 +17,7 @@ public interface ChatClient extends Remote {
     String getName() throws RemoteException;
     ObservableList<String> getUserList() throws RemoteException;
     StringProperty getMessageReceived() throws RemoteException;
+    void updateChatArea(List<String> messages) throws RemoteException;
+    void clearChatArea() throws RemoteException;
+    public void receiveChatHistory(String sender, String recipient, List<String> history) throws RemoteException;
 }
